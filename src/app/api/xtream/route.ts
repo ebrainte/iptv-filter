@@ -104,7 +104,13 @@ export async function GET(request: NextRequest) {
     if (categoryId) {
       filtered = filtered.filter((s) => s.category_id === categoryId);
     }
-    return NextResponse.json(filtered);
+    // Add direct_source so clients stream directly from the provider
+    const providerBase = creds.url.replace(/\/+$/, "");
+    const withDirectSource = filtered.map((s) => ({
+      ...s,
+      direct_source: `${providerBase}/live/${encodeURIComponent(creds.username)}/${encodeURIComponent(creds.password)}/${s.stream_id}.ts`,
+    }));
+    return NextResponse.json(withDirectSource);
   }
 
   if (action === "get_short_epg" || action === "get_simple_data_table") {
@@ -128,14 +134,11 @@ export async function GET(request: NextRequest) {
   }
 
   // Default: account info (auth check)
-  // Return real provider info so IPTV clients stream directly from the provider
-  const providerUrl = new URL(creds.url.startsWith("http") ? creds.url : `http://${creds.url}`);
-
   return NextResponse.json({
     user_info: {
       auth: 1,
-      username: creds.username,
-      password: creds.password,
+      username: provider.short_code,
+      password: provider.password,
       status: "Active",
       exp_date: "9999999999",
       is_trial: "0",
@@ -145,10 +148,10 @@ export async function GET(request: NextRequest) {
       allowed_output_formats: ["m3u8", "ts", "rtmp"],
     },
     server_info: {
-      url: providerUrl.hostname,
-      port: providerUrl.port || (providerUrl.protocol === "https:" ? "443" : "80"),
-      https_port: providerUrl.protocol === "https:" ? "443" : providerUrl.port || "80",
-      server_protocol: providerUrl.protocol.replace(":", ""),
+      url: request.nextUrl.hostname,
+      port: request.nextUrl.port || (request.nextUrl.protocol === "https:" ? "443" : "80"),
+      https_port: "443",
+      server_protocol: request.nextUrl.protocol === "https:" ? "https" : "http",
       rtmp_port: "0",
       timezone: "UTC",
       timestamp_now: Math.floor(Date.now() / 1000),
