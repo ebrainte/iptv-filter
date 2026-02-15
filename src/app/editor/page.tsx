@@ -29,17 +29,20 @@ export default function EditorPage() {
   const [copied, setCopied] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [iptvPassword, setIptvPassword] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const storedToken = sessionStorage.getItem("iptv_session");
+    const storedPassword = sessionStorage.getItem("iptv_password");
 
-    if (!storedToken) {
+    if (!storedToken || !storedPassword) {
       router.push("/");
       return;
     }
 
     setSessionToken(storedToken);
+    setIptvPassword(storedPassword);
 
     // Fetch channel data from server-side session
     fetch(`/api/channels?token=${storedToken}`)
@@ -151,7 +154,7 @@ export default function EditorPage() {
 
       setToken(sessionToken);
       setShortCode(data.shortCode);
-      const url = `${window.location.origin}/api/m3u/${sessionToken}`;
+      const url = `${window.location.origin}/api/m3u/${sessionToken}?password=${encodeURIComponent(iptvPassword!)}`;
       setM3uUrl(url);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to save");
@@ -220,7 +223,7 @@ export default function EditorPage() {
       </div>
 
       {/* Connection Info */}
-      {m3uUrl && shortCode && (
+      {m3uUrl && shortCode && iptvPassword && (
         <div className="mb-6 space-y-4">
           {/* Xtream Codes Login */}
           <div className="p-4 bg-green-900/30 border border-green-800 rounded-lg">
@@ -252,10 +255,10 @@ export default function EditorPage() {
 
               <span className="text-gray-400 text-sm">Password:</span>
               <code className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm font-mono">
-                1234
+                {iptvPassword}
               </code>
               <button
-                onClick={() => handleCopy("1234", "pass")}
+                onClick={() => handleCopy(iptvPassword!, "pass")}
                 className="px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded text-xs font-medium transition-colors cursor-pointer"
               >
                 {copiedField === "pass" ? "Copied!" : "Copy"}

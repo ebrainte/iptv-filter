@@ -23,7 +23,7 @@ export function getDb(): Database.Database {
       short_code TEXT UNIQUE,
       url TEXT NOT NULL,
       username TEXT NOT NULL,
-      password TEXT NOT NULL,
+      password TEXT NOT NULL DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -72,30 +72,30 @@ export function getOrCreateShortCode(providerId: string): string {
 export function getProviderByShortCode(shortCode: string) {
   const db = getDb();
   return db.prepare("SELECT * FROM providers WHERE short_code = ?").get(shortCode) as
-    | { id: string; short_code: string; url: string; username: string; password: string; created_at: string }
+    | { id: string; short_code: string; url: string; username: string; created_at: string }
     | undefined;
 }
 
-export function upsertProvider(id: string, url: string, username: string, password: string): void {
+export function upsertProvider(id: string, url: string, username: string): void {
   const db = getDb();
   db.prepare(`
-    INSERT INTO providers (id, url, username, password)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET url = excluded.url, username = excluded.username, password = excluded.password
-  `).run(id, url, username, password);
+    INSERT INTO providers (id, url, username)
+    VALUES (?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET url = excluded.url, username = excluded.username
+  `).run(id, url, username);
 }
 
 export function getProvider(id: string) {
   const db = getDb();
   return db.prepare("SELECT * FROM providers WHERE id = ?").get(id) as
-    | { id: string; url: string; username: string; password: string; created_at: string }
+    | { id: string; url: string; username: string; created_at: string }
     | undefined;
 }
 
-export function findProviderByCredentials(url: string, username: string, password: string) {
+export function findProviderByCredentials(url: string, username: string) {
   const db = getDb();
-  return db.prepare("SELECT * FROM providers WHERE url = ? AND username = ? AND password = ?").get(url, username, password) as
-    | { id: string; url: string; username: string; password: string; created_at: string }
+  return db.prepare("SELECT * FROM providers WHERE url = ? AND username = ?").get(url, username) as
+    | { id: string; url: string; username: string; created_at: string }
     | undefined;
 }
 

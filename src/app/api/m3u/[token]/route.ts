@@ -4,12 +4,20 @@ import { getLiveStreamsByIds, getLiveCategories, buildM3U, type XtreamCredential
 import { enrichStreamsWithEpg } from "@/lib/epg";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   try {
     const { token } = await params;
+    const password = request.nextUrl.searchParams.get("password");
     console.log(`[M3U] Request for token: ${token}`);
+
+    if (!password) {
+      return new NextResponse("#EXTM3U\n# Missing password parameter", {
+        status: 200,
+        headers: { "Content-Type": "audio/mpegurl" },
+      });
+    }
 
     const provider = getProvider(token);
     if (!provider) {
@@ -33,7 +41,7 @@ export async function GET(
     const creds: XtreamCredentials = {
       url: provider.url,
       username: provider.username,
-      password: provider.password,
+      password,
     };
 
     // Build M3U from Xtream API data instead of fetching get.php

@@ -10,9 +10,6 @@ import {
 } from "@/lib/xtream";
 import { enrichStreamsWithEpg, getEpgListings } from "@/lib/epg";
 
-// Fixed password for our proxy
-const PROXY_PASS = "1234";
-
 // Cache upstream data per provider (5 min TTL)
 interface CacheEntry {
   categories: Category[];
@@ -46,11 +43,14 @@ function getProviderFromRequest(request: NextRequest) {
   const shortCode = request.nextUrl.searchParams.get("username");
   const password = request.nextUrl.searchParams.get("password");
 
-  if (!shortCode || password !== PROXY_PASS) {
+  if (!shortCode || !password) {
     return null;
   }
 
-  return getProviderByShortCode(shortCode);
+  const provider = getProviderByShortCode(shortCode);
+  if (!provider) return null;
+
+  return { ...provider, password };
 }
 
 // Handles both player_api.php and get.php via rewrites
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
     user_info: {
       auth: 1,
       username: provider.short_code,
-      password: PROXY_PASS,
+      password: provider.password,
       status: "Active",
       exp_date: "9999999999",
       is_trial: "0",

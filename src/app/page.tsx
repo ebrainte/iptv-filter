@@ -26,8 +26,9 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Connection failed");
 
-      // Only store the small session token — channel data stays server-side
+      // Store session token and password (password used by IPTV clients, not stored server-side)
       sessionStorage.setItem("iptv_session", data.sessionToken);
+      sessionStorage.setItem("iptv_password", password);
 
       router.push("/editor");
     } catch (err) {

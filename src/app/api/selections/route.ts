@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
     const provider = getProvider(sessionToken);
 
     if (session) {
-      // Session active — persist/update provider in DB
-      upsertProvider(sessionToken, session.url, session.username, session.password);
+      // Session active — persist/update provider in DB (password not stored)
+      upsertProvider(sessionToken, session.url, session.username);
     } else if (!provider) {
       // Neither session nor DB has this provider
       return NextResponse.json({ error: "Session expired, please log in again" }, { status: 401 });
