@@ -1,0 +1,11 @@
+services:
+  iptv-editor:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      - iptv-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  iptv-data:
