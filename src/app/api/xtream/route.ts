@@ -128,11 +128,14 @@ export async function GET(request: NextRequest) {
   }
 
   // Default: account info (auth check)
+  // Return real provider info so IPTV clients stream directly from the provider
+  const providerUrl = new URL(creds.url.startsWith("http") ? creds.url : `http://${creds.url}`);
+
   return NextResponse.json({
     user_info: {
       auth: 1,
-      username: provider.short_code,
-      password: provider.password,
+      username: creds.username,
+      password: creds.password,
       status: "Active",
       exp_date: "9999999999",
       is_trial: "0",
@@ -142,10 +145,10 @@ export async function GET(request: NextRequest) {
       allowed_output_formats: ["m3u8", "ts", "rtmp"],
     },
     server_info: {
-      url: request.nextUrl.origin,
-      port: request.nextUrl.port || "80",
-      https_port: "443",
-      server_protocol: "http",
+      url: providerUrl.hostname,
+      port: providerUrl.port || (providerUrl.protocol === "https:" ? "443" : "80"),
+      https_port: providerUrl.protocol === "https:" ? "443" : providerUrl.port || "80",
+      server_protocol: providerUrl.protocol.replace(":", ""),
       rtmp_port: "0",
       timezone: "UTC",
       timestamp_now: Math.floor(Date.now() / 1000),
