@@ -19,7 +19,7 @@ export async function GET(
       });
     }
 
-    const provider = getProvider(token);
+    const provider = await getProvider(token);
     if (!provider) {
       console.log("[M3U] Provider not found");
       return new NextResponse("#EXTM3U\n# Provider not found", {
@@ -28,7 +28,7 @@ export async function GET(
       });
     }
 
-    const streamIds = getSelections(token);
+    const streamIds = await getSelections(token);
     console.log(`[M3U] Found ${streamIds.length} selected channels`);
 
     if (streamIds.length === 0) {

@@ -16,7 +16,7 @@ export async function GET(
 
   const [shortCode, password, ...rest] = path;
 
-  const provider = getProviderByShortCode(shortCode);
+  const provider = await getProviderByShortCode(shortCode);
   if (!provider) {
     return new NextResponse("Not found", { status: 404 });
   }

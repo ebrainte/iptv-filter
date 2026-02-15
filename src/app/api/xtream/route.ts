@@ -39,7 +39,7 @@ async function getCachedData(providerId: string, creds: XtreamCredentials): Prom
   return entry;
 }
 
-function getProviderFromRequest(request: NextRequest) {
+async function getProviderFromRequest(request: NextRequest) {
   const shortCode = request.nextUrl.searchParams.get("username");
   const password = request.nextUrl.searchParams.get("password");
 
@@ -47,7 +47,7 @@ function getProviderFromRequest(request: NextRequest) {
     return null;
   }
 
-  const provider = getProviderByShortCode(shortCode);
+  const provider = await getProviderByShortCode(shortCode);
   if (!provider) return null;
 
   return { ...provider, password };
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
   const type = request.nextUrl.searchParams.get("_type"); // set by rewrite
   const action = request.nextUrl.searchParams.get("action");
 
-  const provider = getProviderFromRequest(request);
+  const provider = await getProviderFromRequest(request);
   if (!provider) {
     return NextResponse.json({ user_info: { auth: 0 } }, { status: 200 });
   }
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
     password: provider.password,
   };
 
-  const selectedIds = new Set(getSelections(provider.id));
+  const selectedIds = new Set(await getSelections(provider.id));
 
   // get.php — return M3U playlist
   if (type === "m3u") {

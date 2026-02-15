@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     ]);
 
     // Reuse existing provider token or create a new session token
-    const existing = findProviderByCredentials(url, username);
+    const existing = await findProviderByCredentials(url, username);
     const sessionToken = existing?.id ?? uuidv4();
 
     // Store everything server-side

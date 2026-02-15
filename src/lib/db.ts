@@ -1,29 +1,29 @@
-import Database from "better-sqlite3";
-import path from "path";
-import fs from "fs";
+import { createClient, type Client } from "@libsql/client";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+let db: Client | null = null;
+let initialized = false;
 
-let db: Database.Database | null = null;
-
-export function getDb(): Database.Database {
+function getDb(): Client {
   if (db) return db;
 
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
+  db = createClient({
+    url: process.env.TURSO_DATABASE_URL!,
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  });
 
-  db = new Database(path.join(DATA_DIR, "iptv.db"));
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+  return db;
+}
 
-  db.exec(`
+async function ensureSchema() {
+  if (initialized) return;
+  const db = getDb();
+
+  await db.executeMultiple(`
     CREATE TABLE IF NOT EXISTS providers (
       id TEXT PRIMARY KEY,
       short_code TEXT UNIQUE,
       url TEXT NOT NULL,
       username TEXT NOT NULL,
-      password TEXT NOT NULL DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -35,14 +35,7 @@ export function getDb(): Database.Database {
     );
   `);
 
-  // Migration: add short_code column if missing
-  const cols = db.prepare("PRAGMA table_info(providers)").all() as { name: string }[];
-  if (!cols.some((c) => c.name === "short_code")) {
-    db.exec("ALTER TABLE providers ADD COLUMN short_code TEXT");
-    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_providers_short_code ON providers(short_code)");
-  }
-
-  return db;
+  initialized = true;
 }
 
 function generateShortCode(): string {
@@ -54,68 +47,72 @@ function generateShortCode(): string {
   return code;
 }
 
-export function getOrCreateShortCode(providerId: string): string {
+export async function getOrCreateShortCode(providerId: string): Promise<string> {
+  await ensureSchema();
   const db = getDb();
-  const row = db.prepare("SELECT short_code FROM providers WHERE id = ?").get(providerId) as { short_code: string | null } | undefined;
-  if (row?.short_code) return row.short_code;
+  const row = await db.execute({ sql: "SELECT short_code FROM providers WHERE id = ?", args: [providerId] });
+  if (row.rows[0]?.short_code) return row.rows[0].short_code as string;
 
-  // Generate a unique short code
   let code: string;
   do {
     code = generateShortCode();
-  } while (db.prepare("SELECT 1 FROM providers WHERE short_code = ?").get(code));
+    const existing = await db.execute({ sql: "SELECT 1 FROM providers WHERE short_code = ?", args: [code] });
+    if (existing.rows.length === 0) break;
+  } while (true);
 
-  db.prepare("UPDATE providers SET short_code = ? WHERE id = ?").run(code, providerId);
+  await db.execute({ sql: "UPDATE providers SET short_code = ? WHERE id = ?", args: [code, providerId] });
   return code;
 }
 
-export function getProviderByShortCode(shortCode: string) {
+export async function getProviderByShortCode(shortCode: string) {
+  await ensureSchema();
   const db = getDb();
-  return db.prepare("SELECT * FROM providers WHERE short_code = ?").get(shortCode) as
-    | { id: string; short_code: string; url: string; username: string; created_at: string }
-    | undefined;
+  const result = await db.execute({ sql: "SELECT * FROM providers WHERE short_code = ?", args: [shortCode] });
+  if (result.rows.length === 0) return undefined;
+  const row = result.rows[0];
+  return { id: row.id as string, short_code: row.short_code as string, url: row.url as string, username: row.username as string, created_at: row.created_at as string };
 }
 
-export function upsertProvider(id: string, url: string, username: string): void {
+export async function upsertProvider(id: string, url: string, username: string): Promise<void> {
+  await ensureSchema();
   const db = getDb();
-  db.prepare(`
-    INSERT INTO providers (id, url, username)
-    VALUES (?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET url = excluded.url, username = excluded.username
-  `).run(id, url, username);
-}
-
-export function getProvider(id: string) {
-  const db = getDb();
-  return db.prepare("SELECT * FROM providers WHERE id = ?").get(id) as
-    | { id: string; url: string; username: string; created_at: string }
-    | undefined;
-}
-
-export function findProviderByCredentials(url: string, username: string) {
-  const db = getDb();
-  return db.prepare("SELECT * FROM providers WHERE url = ? AND username = ?").get(url, username) as
-    | { id: string; url: string; username: string; created_at: string }
-    | undefined;
-}
-
-export function saveSelections(providerId: string, streamIds: number[]): void {
-  const db = getDb();
-  const deleteStmt = db.prepare("DELETE FROM selections WHERE provider_id = ?");
-  const insertStmt = db.prepare("INSERT INTO selections (provider_id, stream_id) VALUES (?, ?)");
-
-  const transaction = db.transaction(() => {
-    deleteStmt.run(providerId);
-    for (const streamId of streamIds) {
-      insertStmt.run(providerId, streamId);
-    }
+  await db.execute({
+    sql: `INSERT INTO providers (id, url, username) VALUES (?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET url = excluded.url, username = excluded.username`,
+    args: [id, url, username],
   });
-
-  transaction();
 }
 
-export function getSelections(providerId: string): number[] {
+export async function getProvider(id: string) {
+  await ensureSchema();
   const db = getDb();
-  const rows = db.prepare("SELECT stream_id FROM selections WHERE provider_id = ?").all(providerId) as { stream_id: number }[];
-  return rows.map((r) => r.stream_id);
+  const result = await db.execute({ sql: "SELECT * FROM providers WHERE id = ?", args: [id] });
+  if (result.rows.length === 0) return undefined;
+  const row = result.rows[0];
+  return { id: row.id as string, url: row.url as string, username: row.username as string, created_at: row.created_at as string };
+}
+
+export async function findProviderByCredentials(url: string, username: string) {
+  await ensureSchema();
+  const db = getDb();
+  const result = await db.execute({ sql: "SELECT * FROM providers WHERE url = ? AND username = ?", args: [url, username] });
+  if (result.rows.length === 0) return undefined;
+  const row = result.rows[0];
+  return { id: row.id as string, url: row.url as string, username: row.username as string, created_at: row.created_at as string };
+}
+
+export async function saveSelections(providerId: string, streamIds: number[]): Promise<void> {
+  await ensureSchema();
+  const db = getDb();
+  await db.execute({ sql: "DELETE FROM selections WHERE provider_id = ?", args: [providerId] });
+  for (const streamId of streamIds) {
+    await db.execute({ sql: "INSERT INTO selections (provider_id, stream_id) VALUES (?, ?)", args: [providerId, streamId] });
+  }
+}
+
+export async function getSelections(providerId: string): Promise<number[]> {
+  await ensureSchema();
+  const db = getDb();
+  const result = await db.execute({ sql: "SELECT stream_id FROM selections WHERE provider_id = ?", args: [providerId] });
+  return result.rows.map((r) => r.stream_id as number);
 }

@@ -13,20 +13,20 @@ export async function POST(request: NextRequest) {
 
     // Try server-side session first, fall back to database
     const session = getSession(sessionToken);
-    const provider = getProvider(sessionToken);
+    const provider = await getProvider(sessionToken);
 
     if (session) {
       // Session active — persist/update provider in DB (password not stored)
-      upsertProvider(sessionToken, session.url, session.username);
+      await upsertProvider(sessionToken, session.url, session.username);
     } else if (!provider) {
       // Neither session nor DB has this provider
       return NextResponse.json({ error: "Session expired, please log in again" }, { status: 401 });
     }
 
     // Save the selections
-    saveSelections(sessionToken, streamIds);
+    await saveSelections(sessionToken, streamIds);
 
-    const shortCode = getOrCreateShortCode(sessionToken);
+    const shortCode = await getOrCreateShortCode(sessionToken);
     return NextResponse.json({ token: sessionToken, shortCode, count: streamIds.length });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
@@ -41,12 +41,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Missing token" }, { status: 400 });
     }
 
-    const provider = getProvider(token);
+    const provider = await getProvider(token);
     if (!provider) {
       return NextResponse.json({ error: "Provider not found" }, { status: 404 });
     }
 
-    const streamIds = getSelections(token);
+    const streamIds = await getSelections(token);
     return NextResponse.json({ streamIds });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
